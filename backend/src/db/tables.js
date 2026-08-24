@@ -88,8 +88,11 @@ const COLUMNS = {
   reviews: {
     id: 'review_id',
     productId: 'product_id',
-    // product_name and category are denormalised copies of the product row.
-    // Read them from the product, not from here - these can drift.
+    // Denormalised copies of the product row, and both NOT NULL - a write has
+    // to populate them. Read them from the product, never from here: nothing
+    // keeps them in step if a product is renamed.
+    productName: 'product_name',
+    category: 'category',
     customerName: 'customer_name',
     title: 'review_title',
     text: 'review_text',

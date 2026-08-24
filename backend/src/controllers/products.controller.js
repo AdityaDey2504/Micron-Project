@@ -1,7 +1,7 @@
 const productsService = require('../services/products.service');
 const discountsService = require('../services/discounts.service');
 const reviewsService = require('../services/reviews.service');
-const { asyncHandler } = require('../middleware/errorHandler');
+const { asyncHandler, ApiError } = require('../middleware/errorHandler');
 const { PAGE_SIZE_DEFAULT } = require('../utils/constants');
 
 function readPaging(query) {
@@ -75,4 +75,23 @@ const reviews = asyncHandler(async (req, res) => {
   res.json({ ...list, summary });
 });
 
-module.exports = { list, getOne, categories, discounted, search, reviews };
+/**
+ * Post a review. Auth required - the review is attributed to the signed-in
+ * customer's name, which is the only attribution the schema supports.
+ */
+const createReview = asyncHandler(async (req, res) => {
+  const { rating, title, text } = req.body || {};
+  if (!req.user) throw ApiError.unauthorized();
+
+  const review = await reviewsService.createReview(req.params.id, {
+    // Identity comes from the token; the service resolves the display name
+    // from the database, so a review cannot be posted under another name.
+    customerId: req.user.id,
+    rating,
+    title,
+    text,
+  });
+  res.status(201).json(review);
+});
+
+module.exports = { list, getOne, categories, discounted, search, reviews, createReview };

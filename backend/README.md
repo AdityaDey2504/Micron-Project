@@ -92,6 +92,7 @@ register themselves as an admin.
 | `GET` | `/api/orders` | The signed-in customer's orders |
 | `GET` | `/api/orders/:id` | Scoped to the caller — order ids cannot be walked |
 | `POST` | `/api/orders/checkout` | `{ items: [{ productId, quantity }] }` |
+| `POST` | `/api/products/:id/reviews` | `{ rating, title?, text }` — author comes from the token |
 
 ### Admin only
 

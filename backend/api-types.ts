@@ -36,6 +36,7 @@
  *   GET    /api/products/search?q=                   optional  SearchResponse
  *   GET    /api/products/:id                         -         ProductDetailResponse
  *   GET    /api/products/:id/reviews                 -         ReviewListResponse
+ *   POST   /api/products/:id/reviews                 user      Review (201)
  *   POST   /api/cart/price                           -         CartPriceResponse
  *   POST   /api/cart/optimize                        -         CartOptimizeResponse
  *   GET    /api/orders                               user      OrderListResponse
@@ -223,8 +224,32 @@ export interface Review {
   rating: number;
   /** "YYYY-MM-DD". */
   date: string | null;
-  /** Currently "synthetic_demo" for every row - label generated reviews honestly. */
+  /**
+   * "synthetic_demo" for the 5,015 seeded rows, "customer" for anything posted
+   * through the API. Use it to label generated reviews honestly, or to show a
+   * "posted by a shopper" badge on real ones.
+   */
   source: string | null;
+}
+
+/**
+ * POST /products/:id/reviews - requires auth, returns 201 with the new Review.
+ *
+ * The author is taken from the signed-in user's account, never from this body,
+ * so a review cannot be posted under someone else's name. There is no
+ * verified-purchase check: reviews carry a name, not a customer id, so
+ * claiming to verify would be dishonest.
+ *
+ * 400 if rating is not a whole number 1-5 or text is empty · 401 if not signed
+ * in · 404 if the product does not exist.
+ */
+export interface ReviewCreateRequest {
+  /** Whole number, 1-5. */
+  rating: number;
+  /** Optional, trimmed to 120 characters. */
+  title?: string;
+  /** Required, trimmed to 2000 characters. */
+  text: string;
 }
 
 export interface ReviewSummary {

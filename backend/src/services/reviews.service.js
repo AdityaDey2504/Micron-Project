@@ -1,17 +1,19 @@
 const supabase = require('../config/supabase');
-const { TABLES, COLUMNS, mapReview } = require('../db/tables');
+const { TABLES, COLUMNS, generateId, mapReview } = require('../db/tables');
 const { ApiError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
 
 const R = COLUMNS.reviews;
 
 /**
- * Product reviews. Read-only.
+ * Product reviews: read, summarise, and post.
  *
  * The reviews table stores `customer_name` as free text with no foreign key to
- * customers, so a review cannot be attributed to a signed-in user and there is
- * no verified-purchase concept. Writing reviews is therefore not supported
- * here - it would produce rows indistinguishable from the seeded ones.
+ * customers, so a review is attributed by NAME, not by account. That has two
+ * consequences worth knowing: there is no verified-purchase concept, and a
+ * customer cannot be shown "my reviews" reliably. Writes are still supported -
+ * they record the signed-in user's name and set source to 'customer', which is
+ * what distinguishes a real review from the 5,015 seeded 'synthetic_demo' rows.
  *
  * Coverage is uneven: laptops and mobiles have 5 reviews each, earphones have
  * none at all. Callers must handle an empty list as a normal case, not an error.
@@ -121,4 +123,77 @@ async function forChat(productId, { limit = 4 } = {}) {
   };
 }
 
-module.exports = { listForProduct, summaryForProduct, forChat };
+/** Marks reviews written through the API, versus the seeded dataset. */
+const CUSTOMER_SOURCE = 'customer';
+
+const MAX_TITLE = 120;
+const MAX_TEXT = 2000;
+
+/**
+ * Post a review as the signed-in customer.
+ *
+ * The product is verified to exist first, because review_id is minted here and
+ * the foreign key would otherwise fail with a database error rather than a
+ * clear 404.
+ *
+ * Deliberately NOT enforced: that the customer bought the product. There is no
+ * way to check it meaningfully - reviews carry a name, not a customer id - so
+ * pretending to verify would be worse than not claiming to.
+ */
+async function createReview(productId, { customerId, rating, title, text }) {
+  const score = Number(rating);
+  if (!Number.isInteger(score) || score < 1 || score > 5) {
+    throw ApiError.badRequest('rating must be a whole number from 1 to 5');
+  }
+  if (!text || !String(text).trim()) {
+    throw ApiError.badRequest('text is required');
+  }
+
+  // The JWT carries id, email and role - not the display name - so the name is
+  // read from the customer row. Doing it here rather than trusting the request
+  // body means a review cannot be posted under someone else's name.
+  const { data: customer, error: customerError } = await supabase
+    .from(TABLES.customers)
+    .select(COLUMNS.customers.name)
+    .eq(COLUMNS.customers.id, customerId)
+    .maybeSingle();
+
+  if (customerError) fail(customerError, 'review author lookup');
+  if (!customer) throw ApiError.unauthorized('Account no longer exists');
+  const customerName = customer[COLUMNS.customers.name];
+
+  // Title and category come back too: reviews duplicates both as NOT NULL
+  // columns, so an insert has to carry them over from the product.
+  const P = COLUMNS.products;
+  const { data: product, error: productError } = await supabase
+    .from(TABLES.products)
+    .select(`${P.id},${P.name},${P.category}`)
+    .eq(P.id, productId)
+    .maybeSingle();
+
+  if (productError) fail(productError, 'review product lookup');
+  if (!product) throw ApiError.notFound(`No product with id ${productId}`);
+
+  const { data, error } = await supabase
+    .from(TABLES.reviews)
+    .insert({
+      // review_id is a text primary key with no default.
+      [R.id]: generateId('REV'),
+      [R.productId]: productId,
+      [R.productName]: product[P.name],
+      [R.category]: product[P.category],
+      [R.customerName]: customerName,
+      [R.rating]: score,
+      [R.title]: title ? String(title).trim().slice(0, MAX_TITLE) : null,
+      [R.text]: String(text).trim().slice(0, MAX_TEXT),
+      [R.date]: new Date().toISOString().slice(0, 10),
+      [R.source]: CUSTOMER_SOURCE,
+    })
+    .select('*')
+    .single();
+
+  if (error) fail(error, 'review create');
+  return mapReview(data);
+}
+
+module.exports = { listForProduct, summaryForProduct, forChat, createReview };
