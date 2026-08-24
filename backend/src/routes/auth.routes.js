@@ -1,0 +1,1 @@
+// /auth — register, login (mostly proxies Supabase Auth)\n

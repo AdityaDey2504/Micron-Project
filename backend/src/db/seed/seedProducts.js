@@ -1,0 +1,1 @@
+// Generates + inserts 200-500 products + their embeddings\n

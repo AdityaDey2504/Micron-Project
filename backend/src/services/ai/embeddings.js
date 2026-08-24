@@ -1,0 +1,1 @@
+// Wraps Gemini embedding calls (single product + query embedding)\n

@@ -1,0 +1,1 @@
+-- Table definitions incl. pgvector column, run once in Supabase SQL editor\n

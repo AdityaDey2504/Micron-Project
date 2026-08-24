@@ -1,0 +1,1 @@
+// THE core loop: call Gemini -> check for function calls -> execute -> loop -> synthesize\n

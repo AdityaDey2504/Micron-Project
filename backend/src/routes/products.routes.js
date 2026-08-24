@@ -1,0 +1,1 @@
+// /products — CRUD for admin, browse/filter for customers\n
