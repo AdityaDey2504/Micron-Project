@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, Outlet } from 'react-router';
+import { BrowserRouter as Router, Routes, Route, Link, Outlet, Navigate } from 'react-router';
 import Home from './pages/Home';
 import Search from './pages/Search';
 import CatalogOverview from './pages/CatalogOverview';
@@ -12,12 +12,24 @@ import { CustomerDetails } from './pages/CustomerDetails';
 import { Chatbot } from './components/Chatbot';
 import { AppProvider, useApp } from './context/AppContext';
 
-// Header component placed inside AppProvider context scope
+// Client-Side Admin Guard Component
+const AdminGuard: React.FC = () => {
+  const { user, token } = useApp();
+
+  // Check role safely (handle case-sensitivity just in case)
+  const isAdmin = user && (user.role === 'admin');
+
+  if (!token || !isAdmin) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+};
+
 const HeaderNav: React.FC = () => {
   const { user, cart, logout } = useApp();
-
-  // Calculate total items in cart
   const totalCartItems = cart?.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0) || 0;
+  const isAdmin = user && (user.role === 'admin');
 
   return (
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
@@ -30,7 +42,6 @@ const HeaderNav: React.FC = () => {
           <Link to="/search" className="hover:text-indigo-600 transition">Search</Link>
           <Link to="/products" className="hover:text-indigo-600 transition">Catalogs</Link>
           
-          {/* Cart Link with Badge */}
           <Link to="/checkout" className="relative hover:text-indigo-600 transition flex items-center">
             <span>Cart</span>
             {totalCartItems > 0 && (
@@ -40,10 +51,15 @@ const HeaderNav: React.FC = () => {
             )}
           </Link>
 
-          {/* Conditional Auth Button */}
+          {isAdmin && (
+            <Link to="/admin" className="text-amber-600 font-semibold hover:text-amber-700 transition">
+              Admin Panel
+            </Link>
+          )}
+
           {user ? (
             <div className="flex items-center space-x-4">
-              <Link to="/customer" className="hover:text-indigo-600 transition">Account</Link>
+              <Link to="/customer" className="hover:text-indigo-600 transition">Profile</Link>
               <button
                 onClick={logout}
                 className="px-4 py-2 border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50 transition text-xs font-semibold"
@@ -66,18 +82,15 @@ const HeaderNav: React.FC = () => {
 };
 
 const CustomerLayout: React.FC = () => (
-  <AppProvider>
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-      <HeaderNav />
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
-        <Outlet />
-      </main>
-      <Chatbot />
-    </div>
-  </AppProvider>
+  <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
+    <HeaderNav />
+    <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
+      <Outlet />
+    </main>
+    <Chatbot />
+  </div>
 );
 
-// Completely Separate Layout for Admin Interface
 const AdminLayout: React.FC = () => (
   <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
     <header className="bg-slate-800 border-b border-slate-700 h-16 px-6 flex items-center justify-between">
@@ -87,7 +100,7 @@ const AdminLayout: React.FC = () => (
           Admin Control Panel
         </span>
       </div>
-      <Link to="/login" className="text-xs text-slate-400 hover:text-white transition">Exit Admin</Link>
+      <Link to="/" className="text-xs text-slate-400 hover:text-white transition">Exit Admin</Link>
     </header>
     <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
       <Outlet />
@@ -97,26 +110,30 @@ const AdminLayout: React.FC = () => (
 
 const App: React.FC = () => {
   return (
-    <Router>
-      <Routes>
-        {/* Regular User Routes */}
-        <Route element={<CustomerLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/search" element={<Search />} />
-          <Route path="/products" element={<CatalogOverview />} />
-          <Route path="/products/:category" element={<CategoryCatalog />} />
-          <Route path="/product/:id" element={<ProductDetails />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/customer" element={<CustomerDetails />} />
-        </Route>
+    <AppProvider>
+      <Router>
+        <Routes>
+          {/* Customer Routes */}
+          <Route element={<CustomerLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/search" element={<Search />} />
+            <Route path="/products" element={<CatalogOverview />} />
+            <Route path="/products/:category" element={<CategoryCatalog />} />
+            <Route path="/product/:id" element={<ProductDetails />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/customer" element={<CustomerDetails />} />
+          </Route>
 
-        {/* Isolated Admin Routes */}
-        <Route element={<AdminLayout />}>
-          <Route path="/admin" element={<AdminDashboard />} />
-        </Route>
-      </Routes>
-    </Router>
+          {/* Protected Admin Routes */}
+          <Route element={<AdminGuard />}>
+            <Route element={<AdminLayout />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+            </Route>
+          </Route>
+        </Routes>
+      </Router>
+    </AppProvider>
   );
 };
 

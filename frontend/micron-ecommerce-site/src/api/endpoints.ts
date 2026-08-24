@@ -78,15 +78,85 @@ export const updateProductStock = (id: string, stock: number) =>
     body: JSON.stringify({ stock }),
   });
 
-export const deleteProduct = (id: string) =>
-  apiFetch<DeleteResponse>(`/api/admin/products/${id}`, { method: 'DELETE' });
 
 export const getAdminInventory = () => apiFetch<InventoryResponse>('/api/admin/inventory');
 
 export const getAdminOrders = () => apiFetch<OrderListResponse>('/api/admin/orders');
 
-export const updateOrderStatus = (id: string, status: string) =>
-  apiFetch<Order>(`/api/admin/orders/${id}/status`, {
+
+  // src/api/endpoints.ts
+
+const getAuthHeader = () => {
+  const token = localStorage.getItem('aura_auth_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
+
+export async function fetchAdminProducts() {
+  const response = await fetch('/api/products', { headers: getAuthHeader() });
+  if (!response.ok) throw new Error('Failed to fetch products');
+  return response.json();
+}
+
+export async function fetchAdminInventory() {
+  const response = await fetch('/api/admin/inventory', { headers: getAuthHeader() });
+  if (!response.ok) throw new Error('Failed to fetch inventory');
+  return response.json();
+}
+
+export async function fetchAdminOrders() {
+  const response = await fetch('/api/admin/orders', { headers: getAuthHeader() });
+  if (!response.ok) throw new Error('Failed to fetch orders');
+  return response.json();
+}
+
+export async function createProduct(payload: { title: string; category: string; price: number; stock: number }) {
+  const response = await fetch('/api/admin/products', {
+    method: 'POST',
+    headers: getAuthHeader(),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw new Error('Failed to create product');
+  return response.json();
+}
+
+export async function deleteProduct(id: string) {
+  const response = await fetch(`/api/admin/products/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeader(),
+  });
+  if (!response.ok) throw new Error('Failed to delete product');
+  return response.json();
+}
+
+export async function setStock(id: string, stock: number) {
+  const response = await fetch(`/api/admin/products/${id}/stock`, {
+    method: 'PUT',
+    headers: getAuthHeader(),
+    body: JSON.stringify({ stock }),
+  });
+  if (!response.ok) throw new Error('Failed to update stock');
+  return response.json();
+}
+
+export async function setDiscount(id: string, discountPercentage: number) {
+  const response = await fetch(`/api/admin/products/${id}/discount`, {
+    method: 'PUT',
+    headers: getAuthHeader(),
+    body: JSON.stringify({ discountPercentage }),
+  });
+  if (!response.ok) throw new Error('Failed to set discount');
+  return response.json();
+}
+
+export async function updateOrderStatus(id: string, status: string) {
+  const response = await fetch(`/api/admin/orders/${id}/status`, {
     method: 'PATCH',
+    headers: getAuthHeader(),
     body: JSON.stringify({ status }),
   });
+  if (!response.ok) throw new Error('Failed to update order status');
+  return response.json();
+}
