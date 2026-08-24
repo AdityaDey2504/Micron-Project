@@ -13,7 +13,11 @@
 const fs = require('fs');
 const supabase = require('../../config/supabase');
 const { TABLES, COLUMNS, generateId } = require('../tables');
-const { embedBatch, productToEmbeddingText } = require('../../services/ai/embeddings');
+const {
+  embedBatch,
+  productToEmbeddingText,
+  DOCUMENT_TASK_PREFIX,
+} = require('../../services/ai/embeddings');
 
 const P = COLUMNS.products;
 const O = COLUMNS.productsOptional;
@@ -210,13 +214,17 @@ async function backfillEmbeddings() {
   }
 
   console.log(`embedding ${data.length} products...`);
+  // Every embedded string needs the task prefix, whichever source it comes
+  // from - productToEmbeddingText already bakes it in, so the searchable_text
+  // fallback has to add it itself here.
   const texts = data.map((row) =>
-    row[P.searchableText] ||
-      productToEmbeddingText({
-        name: row[P.name],
-        category: row[P.category],
-        description: row[P.description],
-      })
+    row[P.searchableText]
+      ? `${DOCUMENT_TASK_PREFIX}${row[P.searchableText]}`.slice(0, 2000)
+      : productToEmbeddingText({
+          name: row[P.name],
+          category: row[P.category],
+          description: row[P.description],
+        })
   );
 
   const vectors = await embedBatch(texts);
