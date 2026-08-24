@@ -2,6 +2,7 @@ const productsService = require('../products.service');
 const ordersService = require('../orders.service');
 const cartService = require('../cart.service');
 const discountsService = require('../discounts.service');
+const reviewsService = require('../reviews.service');
 const embeddings = require('./embeddings');
 const { rankProducts, diffProducts, lexicalSimilarity } = require('./ranking');
 const { RECENT_PURCHASE_DAYS } = require('../../utils/constants');
@@ -153,7 +154,13 @@ async function searchProducts(args, context) {
 
   // Pull a wide candidate set, then let the ranker narrow it - ranking over
   // 5 rows the database happened to return first would be pointless.
-  const CANDIDATE_POOL = 30;
+  //
+  // Set to the maximum page size on purpose. The database returns matches in
+  // primary-key order, not relevance order, so a small pool is an arbitrary
+  // slice: searching "mobile phone under 20000" with a pool of 30 surfaced
+  // only sub-500-rupee feature phones, because the better ones never got
+  // fetched for the ranker to consider.
+  const CANDIDATE_POOL = 100;
 
   let candidates = await productsService.searchByEmbedding(queryEmbedding, {
     limit: CANDIDATE_POOL,
@@ -162,7 +169,14 @@ async function searchProducts(args, context) {
   });
 
   if (!candidates || candidates.length === 0) {
-    const filters = { search: query, category, minPrice, maxPrice, onlyDiscounted };
+    const filters = {
+      search: query,
+      category,
+      minPrice,
+      maxPrice,
+      onlyDiscounted,
+      sort: 'popular',
+    };
 
     // Narrowest first: products matching EVERY word in the query. That is what
     // makes "gaming laptop" return laptops rather than gaming earbuds.
@@ -359,6 +373,17 @@ async function optimizeCart(args, context) {
   return cartService.suggestSwaps(context.cart);
 }
 
+/**
+ * What customers wrote about a product. Returns the best and worst review
+ * rather than the newest, so the model can answer honestly instead of
+ * quoting whichever one happened to be most recent.
+ */
+async function getProductReviews(args) {
+  const product = await productsService.getProductById(args.product_id);
+  const reviews = await reviewsService.forChat(args.product_id);
+  return { product: { id: product.id, name: product.name }, ...reviews };
+}
+
 async function listDiscounts(args) {
   const { items } = await discountsService.listDiscountedProducts({
     category: args?.category,
@@ -377,6 +402,7 @@ const HANDLERS = {
   whatIfBudget,
   optimizeCart,
   listDiscounts,
+  getProductReviews,
 };
 
 /**

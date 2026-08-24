@@ -95,6 +95,18 @@ const TOOL_SCHEMAS = [
     parameters: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'getProductReviews',
+    description:
+      'Fetch what customers actually wrote about a product, plus its average rating. Use for "is this any good", "what do people say about it", "is it worth buying", or any question about quality, reliability or real-world experience that specs cannot answer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        product_id: { type: 'string', description: 'The id of the product to fetch reviews for.' },
+      },
+      required: ['product_id'],
+    },
+  },
+  {
     name: 'listDiscounts',
     description:
       'List the products currently on offer, biggest discount first. Use for "show me discounted products" or "what is on sale".',
@@ -120,6 +132,7 @@ Rules:
 - If a tool returns nothing, say so plainly and suggest a broader search. Do not fill the gap with a guess.
 - When a searchProducts result carries a recentPurchase note AND you are recommending something new to the customer, mention it kindly and let the customer decide - do not refuse to recommend. Do NOT mention it when the searchProducts call was only used to resolve a product name to an id for an availability/stock check (see chain 2 below) - the customer already knows they own that product; bringing up a past purchase in that context is a non sequitur, not a helpful warning.
 - Quote finalPrice as the price to pay, and mention the discount when there is one.
+- When summarising reviews, give a balanced answer - mention a real drawback if reviewers raised one, and never quote a review that was not returned. If a product has no reviews, say so rather than implying it is unrated.
 - Be brief: two or three sentences plus a short list. This renders in a small chat window.
 - If the customer is not signed in, order-history questions cannot be answered - ask them to log in.
 - Prefer a single tool call. Choose the one tool that can fully answer the question and call it once. Only make a second or third call when the first result is genuinely insufficient to answer what was asked - for example it errored, came back empty, or the question itself needs a second lookup (a comparison, a budget re-run, a stock check on a specific item, or one of the named chains below). Do not call another tool just to double-check an answer you already have.

@@ -11,7 +11,10 @@ cp .env.example .env      # then fill in the values
 npm run dev               # http://localhost:4000
 ```
 
-`.env` currently contains only a placeholder comment — copy `.env.example` over it.
+Copy `.env.example` to `.env` and fill it in. Note: `SUPABASE_URL` must NOT end
+in `/rest/v1/` — the Supabase dashboard shows it that way, but the client
+appends it, producing a 404 on every query. `config/env.js` strips it defensively.
+
 `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` and `JWT_SECRET` are required; the server
 refuses to boot without them, on purpose. Use the **service role** key: this is a
 trusted server and RLS would otherwise block every query.
@@ -21,23 +24,22 @@ deterministic keyword router instead of the model.
 
 Health check: `GET /health`.
 
-## Blocked on the DB owner
+## Database status
 
-Checked against the live schema pulled from Supabase. Every column the backend
-uses exists, with one exception:
+Verified against the live schema. Auth columns (`email`, `password_hash`,
+`role`) are in, and every endpoint has been run end-to-end against real data.
 
-**`customers` has no `email`, `password_hash` or `role`**, so registration and
-login cannot work at all, and there is no way to tell an admin from a customer.
-The API hashes with bcrypt and issues its own JWT — it just needs those three
-columns. The `ALTER TABLE` statements are ready to paste in
-**`src/db/schema.sql`**, along with the pgvector setup.
+**One thing outstanding:** the `embedding` column exists but the
+`match_products` function does not, so semantic search is not live — product
+search falls back to keyword matching automatically and the chatbot works
+either way. The SQL is ready to paste in **`src/db/schema.sql`**.
 
-Also worth adding: `idx_orders_order_date` and `idx_products_price`. The four
-indexes already written cover the joins; those two cover the 60-day
-recent-purchase window and every budget-filtered search.
+Also worth adding: `idx_orders_order_date` and `idx_products_price`. The
+existing indexes cover the joins; those two cover the 60-day recent-purchase
+window and every budget-filtered search.
 
-Until pgvector lands, product search falls back to keyword matching on
-`searchable_text` automatically. The chatbot works either way.
+Note `products.searchable_text` is NULL for all 1,428 rows — search matches on
+`title` and `category` instead. Do not build embeddings on that column.
 
 ## Where the schema lives in the code
 
@@ -75,6 +77,7 @@ register themselves as an admin.
 | `GET` | `/api/products/discounted` | Biggest discount first |
 | `GET` | `/api/products/search` | `?q=` — the ranked search the chatbot uses, without the model call |
 | `GET` | `/api/products/:id` | Includes `stock` |
+| `GET` | `/api/products/:id/reviews` | Reviews + rating summary. Empty for all earphones |
 | `POST` | `/api/auth/register` | `{ name, email, password }` → `{ token, user }` |
 | `POST` | `/api/auth/login` | `{ email, password }` → `{ token, user }` |
 | `POST` | `/api/cart/price` | `{ items: [{ productId, quantity }] }` |
@@ -89,6 +92,7 @@ register themselves as an admin.
 | `GET` | `/api/orders` | The signed-in customer's orders |
 | `GET` | `/api/orders/:id` | Scoped to the caller — order ids cannot be walked |
 | `POST` | `/api/orders/checkout` | `{ items: [{ productId, quantity }] }` |
+| `POST` | `/api/products/:id/reviews` | `{ rating, title?, text }` — author comes from the token |
 
 ### Admin only
 
@@ -104,6 +108,22 @@ register themselves as an admin.
 | `PATCH` | `/api/admin/orders/:id/status` |
 
 ## Notes for the frontend
+
+**Response types: [`backend/api-types.ts`](./api-types.ts).** Every endpoint's
+response as a TypeScript interface, generated from real responses against the
+live database. Copy it to `src/types/api.ts` and import from there.
+
+Three things in it that will bite if skimmed:
+
+- **`Product` and `RankedProduct` are different shapes.** `/products` returns
+  `Product`, where `price` is pre-discount and `finalPrice` is what you charge.
+  `/products/search` and `/chat` return `RankedProduct`, where `price` is
+  already the final price and the pre-discount one is `listPrice`.
+- **`stock: null` means unknown, not sold out.** 78 products have no inventory
+  row. Rendering "Out of stock" for those is wrong.
+- **Optional fields are genuinely absent**, not null — `rating`, `mrp`,
+  `productUrl` and friends only appear when the dataset had them. Guard before
+  rendering. `description` is often `null` too.
 
 **The cart is yours.** There is no cart table in the schema, so the cart lives in
 the browser. Send the whole thing to `/api/cart/price` whenever you need totals,
@@ -154,7 +174,7 @@ chat bubble. Rate limited to 20 messages/minute per user.
 
 Your file is **`src/services/ai/orchestrator.js`**. The backend side is done:
 
-- `toolSchemas.js` — the 7 Gemini function declarations and the system prompt
+- `toolSchemas.js` — the 8 Gemini function declarations and the system prompt
 - `toolDispatcher.js` — `dispatch(name, args, context)` runs any of them
 - `config/gemini.js` — `generateContent()`, `extractText()`, `extractFunctionCalls()`
 - `ranking.js` — the weighted scorer (0.4 semantic / 0.3 budget / 0.2 discount / 0.1 novelty)
@@ -165,7 +185,13 @@ results back → answer loop and works as-is. Replace or extend it freely, but k
 depend on them. The contract is documented at the top of the file.
 
 Tools available: `searchProducts`, `getOrderHistory`, `checkInventory`,
-`compareProducts`, `whatIfBudget`, `optimizeCart`, `listDiscounts`.
+`compareProducts`, `whatIfBudget`, `optimizeCart`, `listDiscounts`,
+`getProductReviews`.
+
+`getProductReviews` returns the highest AND lowest rated review rather than the
+newest, so the model can answer "is this any good?" honestly instead of quoting
+whichever review happened to be most recent. The keyword fallback router does
+not route review questions - it only matters without an API key.
 
 Two things the ranking layer does that are worth knowing:
 

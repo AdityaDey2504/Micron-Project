@@ -1,10 +1,23 @@
 export interface Product {
-  id: number;
-  title: string;
-  price: number;
+  id: string;
+  name: string;
   category: string;
-  imageUrl?: string;
-  description?: string;
+  description: string;
+  price: number; // Pre-discount price
+  discountPercent: number;
+  finalPrice: number; // Struck-through price/what customer pays
+  imageUrl: string;
+  stock: number | null;
+  rating: number;
+  ratingCount: number;
+  mrp: number;
+}
+
+export interface PaginatedProductsResponse {
+  items: Product[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface CatalogCategory {
