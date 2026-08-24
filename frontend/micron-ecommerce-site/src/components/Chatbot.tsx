@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { type SubmitEvent } from 'react';
 import { Link } from 'react-router';
 import { sendChatMessage } from '../api/endpoints';
 import type { RankedProduct, ChatHistoryTurn } from '../types/api-types';
@@ -28,44 +27,54 @@ export const Chatbot: React.FC = () => {
     if (isOpen) messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen]);
 
-  const handleSendMessage = async (e: SubmitEvent) => {
+  const handleSendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
     const userText = input;
     const userMsg: UIMessage = { id: Date.now().toString(), sender: 'user', text: userText };
-
-    const userText = input;
-    const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: userText };
-    const loadingId = Date.now().toString() + 'loading';
-    setMessages((prev) => [...prev, userMsg, { id: loadingId, sender: 'bot', text: 'Thinking...' }]);
+    
+    setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userText }),
+      // Keep last 10 turns for context
+      const history: ChatHistoryTurn[] = messages
+        .map((m) => ({
+          role: m.sender === 'user' ? ('user' as const) : ('assistant' as const),
+          content: m.text,
+        }))
+        .slice(-10);
+
+      // Uses central endpoint pointing to localhost:4000 with Auth headers
+      const response = await sendChatMessage({
+        message: userText,
+        history,
+        cart,
+        sessionId,
       });
 
-      if (!response.ok) throw new Error('Failed to fetch response');
+      setSessionId(response.sessionId);
 
-      const data = await response.json();
-      const botMsg: Message = {
+      const botMsg: UIMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: data.reply,
+        text: response.reply,
+        products: response.products,
       };
-      setMessages((prev) => prev.map(m => m.id === loadingId ? botMsg : m));
+
+      setMessages((prev) => [...prev, botMsg]);
     } catch (error) {
       console.error('Chat error:', error);
-      const errorMsg: Message = {
+      const errorMsg: UIMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: "Sorry, I'm having trouble connecting right now.",
+        text: error instanceof Error ? error.message : "Sorry, I'm having trouble connecting right now.",
       };
-      setMessages((prev) => prev.map(m => m.id === loadingId ? errorMsg : m));
+      setMessages((prev) => [...prev, errorMsg]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
