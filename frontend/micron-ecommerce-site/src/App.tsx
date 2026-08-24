@@ -9,8 +9,8 @@ import Checkout from './pages/Checkout';
 import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 import CustomerDetails from './pages/CustomerDetails';
+import { Chatbot } from './components/Chatbot';
 
-// Layout for Regular Storefront (No Admin link in header)
 const CustomerLayout: React.FC = () => (
   <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
     <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
@@ -27,9 +27,12 @@ const CustomerLayout: React.FC = () => (
         </nav>
       </div>
     </header>
+    
     <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
       <Outlet />
     </main>
+
+    <Chatbot/>
   </div>
 );
 
