@@ -1,0 +1,20 @@
+# Secrets. .env holds the Supabase service-role key, which bypasses RLS and
+# grants full read/write access to the database - it must never be committed.
+.env
+.env.local
+.env.*.local
+.env.backup
+.env.bak
+
+# Committed instead, as the template to copy:
+!.env.example
+
+node_modules/
+npm-debug.log*
+
+# Dataset CSVs - too large for git, and re-downloadable from Kaggle.
+data/
+*.csv
+
+.DS_Store
+*.log
