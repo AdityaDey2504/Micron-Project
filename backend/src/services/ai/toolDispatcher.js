@@ -2,6 +2,7 @@ const productsService = require('../products.service');
 const ordersService = require('../orders.service');
 const cartService = require('../cart.service');
 const discountsService = require('../discounts.service');
+const reviewsService = require('../reviews.service');
 const embeddings = require('./embeddings');
 const { rankProducts, diffProducts, lexicalSimilarity } = require('./ranking');
 const { RECENT_PURCHASE_DAYS } = require('../../utils/constants');
@@ -289,6 +290,17 @@ async function optimizeCart(args, context) {
   return cartService.suggestSwaps(context.cart);
 }
 
+/**
+ * What customers wrote about a product. Returns the best and worst review
+ * rather than the newest, so the model can answer honestly instead of
+ * quoting whichever one happened to be most recent.
+ */
+async function getProductReviews(args) {
+  const product = await productsService.getProductById(args.product_id);
+  const reviews = await reviewsService.forChat(args.product_id);
+  return { product: { id: product.id, name: product.name }, ...reviews };
+}
+
 async function listDiscounts(args) {
   const { items } = await discountsService.listDiscountedProducts({
     category: args?.category,
@@ -307,6 +319,7 @@ const HANDLERS = {
   whatIfBudget,
   optimizeCart,
   listDiscounts,
+  getProductReviews,
 };
 
 /**

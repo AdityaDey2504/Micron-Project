@@ -21,6 +21,7 @@ const TABLES = {
   orders: 'orders',
   orderItems: 'order_items',
   inventory: 'inventory',
+  reviews: 'reviews',
 };
 
 const COLUMNS = {
@@ -82,6 +83,19 @@ const COLUMNS = {
     productId: 'product_id',
     quantity: 'quantity',
     unitPrice: 'price_paid',
+  },
+
+  reviews: {
+    id: 'review_id',
+    productId: 'product_id',
+    // product_name and category are denormalised copies of the product row.
+    // Read them from the product, not from here - these can drift.
+    customerName: 'customer_name',
+    title: 'review_title',
+    text: 'review_text',
+    rating: 'rating',
+    date: 'review_date',
+    source: 'source',
   },
 
   inventory: {
@@ -173,6 +187,23 @@ function mapCustomer(row) {
   };
 }
 
+function mapReview(row) {
+  if (!row) return null;
+  const c = COLUMNS.reviews;
+  return {
+    id: row[c.id],
+    productId: row[c.productId],
+    author: row[c.customerName],
+    title: row[c.title] ?? null,
+    text: row[c.text] ?? null,
+    rating: Number(row[c.rating] ?? 0),
+    date: row[c.date] ?? null,
+    // Every row is currently 'synthetic_demo'. Exposed so the UI can label
+    // generated reviews honestly rather than passing them off as real.
+    source: row[c.source] ?? null,
+  };
+}
+
 function mapOrder(row, items) {
   if (!row) return null;
   const c = COLUMNS.orders;
@@ -209,6 +240,7 @@ module.exports = {
   generateId,
   mapProduct,
   mapCustomer,
+  mapReview,
   mapOrder,
   mapOrderItem,
 };

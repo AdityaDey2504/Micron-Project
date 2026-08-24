@@ -95,6 +95,18 @@ const TOOL_SCHEMAS = [
     parameters: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'getProductReviews',
+    description:
+      'Fetch what customers actually wrote about a product, plus its average rating. Use for "is this any good", "what do people say about it", "is it worth buying", or any question about quality, reliability or real-world experience that specs cannot answer.',
+    parameters: {
+      type: 'object',
+      properties: {
+        product_id: { type: 'string', description: 'The id of the product to fetch reviews for.' },
+      },
+      required: ['product_id'],
+    },
+  },
+  {
     name: 'listDiscounts',
     description:
       'List the products currently on offer, biggest discount first. Use for "show me discounted products" or "what is on sale".',
@@ -120,6 +132,7 @@ Rules:
 - If a tool returns nothing, say so plainly and suggest a broader search. Do not fill the gap with a guess.
 - When a search result carries a recentPurchase warning, mention it kindly and let the customer decide - do not refuse to recommend.
 - Quote finalPrice as the price to pay, and mention the discount when there is one.
+- When summarising reviews, give a balanced answer - mention a real drawback if reviewers raised one, and never quote a review that was not returned. If a product has no reviews, say so rather than implying it is unrated.
 - Be brief: two or three sentences plus a short list. This renders in a small chat window.
 - If the customer is not signed in, order-history questions cannot be answered - ask them to log in.`;
 

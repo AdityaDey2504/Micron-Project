@@ -11,5 +11,6 @@ router.get('/discounted', controller.discounted);
 router.get('/search', optionalAuth, controller.search);
 router.get('/', controller.list);
 router.get('/:id', controller.getOne);
+router.get('/:id/reviews', controller.reviews);
 
 module.exports = router;

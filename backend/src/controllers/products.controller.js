@@ -1,5 +1,6 @@
 const productsService = require('../services/products.service');
 const discountsService = require('../services/discounts.service');
+const reviewsService = require('../services/reviews.service');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { PAGE_SIZE_DEFAULT } = require('../utils/constants');
 
@@ -62,4 +63,16 @@ const search = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
-module.exports = { list, getOne, categories, discounted, search };
+/**
+ * Reviews for one product, with the rating summary alongside so the page can
+ * render the header and the list from a single request.
+ */
+const reviews = asyncHandler(async (req, res) => {
+  const [list, summary] = await Promise.all([
+    reviewsService.listForProduct(req.params.id, readPaging(req.query)),
+    reviewsService.summaryForProduct(req.params.id),
+  ]);
+  res.json({ ...list, summary });
+});
+
+module.exports = { list, getOne, categories, discounted, search, reviews };
