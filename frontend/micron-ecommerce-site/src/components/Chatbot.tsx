@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router';
-import { sendChatMessage } from '../api/endpoints';
+import { sendChatMessage, getProductById } from '../api/endpoints';
 import type { RankedProduct, ChatHistoryTurn } from '../types/api-types';
 import { useApp } from '../context/AppContext';
 
@@ -10,6 +10,55 @@ interface UIMessage {
   text: string;
   products?: RankedProduct[];
 }
+
+/** Helper component to fetch and render the real image URL for RankedProduct */
+const ChatProductCard: React.FC<{ prod: RankedProduct }> = ({ prod }) => {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Fetch full product details to get its real imageUrl
+    getProductById(prod.id)
+      .then((fullProduct) => {
+        if (fullProduct.imageUrl) {
+          setImageUrl(fullProduct.imageUrl);
+        }
+      })
+      .catch(() => {
+        // Silently ignore failures and display category icon fallback
+      });
+  }, [prod.id]);
+
+  return (
+    <Link
+      to={`/product/${prod.id}`}
+      className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg hover:border-indigo-600 transition shadow-sm"
+    >
+      <div className="w-10 h-10 bg-slate-100 rounded shrink-0 flex items-center justify-center text-slate-400 overflow-hidden">
+        {imageUrl ? (
+          <img
+            src={imageUrl}
+            alt={prod.name}
+            className="w-full h-full object-cover rounded"
+          />
+        ) : (
+          /* SVG Fallback Icon when image is loading or unavailable */
+          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="truncate font-medium text-slate-800 text-xs">{prod.name}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <span className="text-indigo-600 font-bold text-xs">₹{prod.price}</span>
+          {prod.discountPercent > 0 && (
+            <span className="text-slate-400 line-through text-[10px]">₹{prod.listPrice}</span>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+};
 
 export const Chatbot: React.FC = () => {
   const { cart } = useApp();
@@ -33,13 +82,12 @@ export const Chatbot: React.FC = () => {
 
     const userText = input;
     const userMsg: UIMessage = { id: Date.now().toString(), sender: 'user', text: userText };
-    
+
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
 
     try {
-      // Keep last 10 turns for context
       const history: ChatHistoryTurn[] = messages
         .map((m) => ({
           role: m.sender === 'user' ? ('user' as const) : ('assistant' as const),
@@ -47,7 +95,6 @@ export const Chatbot: React.FC = () => {
         }))
         .slice(-10);
 
-      // Uses central endpoint pointing to localhost:4000 with Auth headers
       const response = await sendChatMessage({
         message: userText,
         history,
@@ -81,7 +128,7 @@ export const Chatbot: React.FC = () => {
   return (
     <div className="fixed bottom-6 left-6 z-50 flex flex-col items-start">
       {isOpen && (
-        <div className="w-80 h-96 bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col mb-3 overflow-hidden transition-all">
+        <div className="w-96 h-112 bg-white border border-slate-200 rounded-2xl shadow-xl flex flex-col mb-3 overflow-hidden transition-all">
           <div className="bg-slate-900 px-4 py-3 flex justify-between items-center text-white">
             <div className="flex items-center space-x-2">
               <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
@@ -104,19 +151,7 @@ export const Chatbot: React.FC = () => {
                 {msg.products && msg.products.length > 0 && (
                   <div className="mt-2 w-full space-y-1.5">
                     {msg.products.map((prod) => (
-                      <Link 
-                        key={prod.id} 
-                        to={`/product/${prod.id}`}
-                        className="flex items-center gap-2 p-2 bg-white border border-slate-200 rounded-lg hover:border-indigo-600 transition"
-                      >
-                        <div className="w-8 h-8 bg-slate-100 rounded shrink-0 flex items-center justify-center text-[10px] text-slate-400">
-                          IMG
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="truncate font-medium text-slate-800">{prod.name}</p>
-                          <p className="text-indigo-600 font-semibold">₹{prod.price}</p>
-                        </div>
-                      </Link>
+                      <ChatProductCard key={prod.id} prod={prod} />
                     ))}
                   </div>
                 )}
