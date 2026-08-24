@@ -10,30 +10,33 @@ import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
 import CustomerDetails from './pages/CustomerDetails';
 import { Chatbot } from './components/Chatbot';
+import { AppProvider } from './context/AppContext';
 
 const CustomerLayout: React.FC = () => (
-  <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-    <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link to="/" className="text-xl font-semibold tracking-tight text-slate-900">
-          AURA<span className="text-indigo-600">.</span>
-        </Link>
-        <nav className="flex items-center space-x-6 text-sm font-medium text-slate-600">
-          <Link to="/" className="hover:text-indigo-600 transition">Home</Link>
-          <Link to="/search" className="hover:text-indigo-600 transition">Search</Link>
-          <Link to="/products" className="hover:text-indigo-600 transition">Catalogs</Link>
-          <Link to="/customer" className="hover:text-indigo-600 transition">Account</Link>
-          <Link to="/login" className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition text-xs font-semibold">Login</Link>
-        </nav>
-      </div>
-    </header>
-    
-    <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
-      <Outlet />
-    </main>
+  <AppProvider>
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+          <Link to="/" className="text-xl font-semibold tracking-tight text-slate-900">
+            AURA<span className="text-indigo-600">.</span>
+          </Link>
+          <nav className="flex items-center space-x-6 text-sm font-medium text-slate-600">
+            <Link to="/" className="hover:text-indigo-600 transition">Home</Link>
+            <Link to="/search" className="hover:text-indigo-600 transition">Search</Link>
+            <Link to="/products" className="hover:text-indigo-600 transition">Catalogs</Link>
+            <Link to="/customer" className="hover:text-indigo-600 transition">Account</Link>
+            <Link to="/login" className="px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition text-xs font-semibold">Login</Link>
+          </nav>
+        </div>
+      </header>
+      
+      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
+        <Outlet />
+      </main>
 
-    <Chatbot/>
-  </div>
+      <Chatbot/>
+    </div>
+  </AppProvider>
 );
 
 // Completely Separate Layout for Admin Interface
