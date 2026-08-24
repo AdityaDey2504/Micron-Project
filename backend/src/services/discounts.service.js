@@ -1,0 +1,1 @@
+// discount lookups, used by both admin and searchProducts filters\n

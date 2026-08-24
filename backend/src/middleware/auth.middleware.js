@@ -1,0 +1,1 @@
+// Verifies Supabase JWT on protected routes, attaches user to req\n

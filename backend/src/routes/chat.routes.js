@@ -1,0 +1,1 @@
+// /chat — the single endpoint the frontend chatbot hits\n
