@@ -1,3 +1,4 @@
+const { GoogleGenAI } = require('@google/genai');
 const env = require('./env');
 const logger = require('../utils/logger');
 
@@ -11,6 +12,15 @@ const logger = require('../utils/logger');
 const BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 const isConfigured = () => Boolean(env.geminiApiKey);
+
+/**
+ * @google/genai SDK client, used by services/ai/embeddings.js for the
+ * embedContent calls (gemini-embedding-2). Kept separate from the fetch-based
+ * client above so the existing generateContent/isConfigured contract that
+ * orchestrator.js depends on is untouched. null when no API key is set -
+ * embeddings.js falls back to keyword search in that case.
+ */
+const genAIClient = env.geminiApiKey ? new GoogleGenAI({ apiKey: env.geminiApiKey }) : null;
 
 /**
  * One generateContent call.
@@ -75,4 +85,4 @@ function extractFunctionCalls(response) {
     .map((p) => ({ name: p.functionCall.name, args: p.functionCall.args || {} }));
 }
 
-module.exports = { generateContent, extractText, extractFunctionCalls, isConfigured };
+module.exports = { generateContent, extractText, extractFunctionCalls, isConfigured, genAIClient };
