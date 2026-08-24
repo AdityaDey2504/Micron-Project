@@ -1,7 +1,28 @@
 const gemini = require('../../config/gemini');
 const { dispatch } = require('./toolDispatcher');
 const { TOOL_SCHEMAS, SYSTEM_INSTRUCTION } = require('./toolSchemas');
+const { formatDaysAgo } = require('../../utils/formatDaysAgo');
 const logger = require('../../utils/logger');
+
+const customerHistory = new Map();
+const MAX_BACKEND_HISTORY_TURNS = 6;
+
+function getCustomerHistory(customerId) {
+  return customerHistory.get(customerId) || [];
+}
+
+function appendCustomerHistory(customerId, userText, modelText) {
+  if (!customerId) return;
+  const h = customerHistory.get(customerId) || [];
+  h.push(
+    { role: 'user', content: userText },
+    { role: 'assistant', content: modelText }
+  );
+  if (h.length > MAX_BACKEND_HISTORY_TURNS * 2) {
+    h.splice(0, h.length - (MAX_BACKEND_HISTORY_TURNS * 2));
+  }
+  customerHistory.set(customerId, h);
+}
 
 /**
  * ===========================================================================
@@ -38,6 +59,10 @@ const logger = require('../../utils/logger');
 const MAX_TOOL_ROUNDS = 3;
 
 async function runChat({ message, history = [], context = {} }) {
+  if (context.customerId) {
+    history = getCustomerHistory(context.customerId);
+  }
+
   if (!message || !message.trim()) {
     return { reply: 'What are you shopping for?', products: [], toolCalls: [], usedModel: false };
   }
@@ -50,6 +75,47 @@ async function runChat({ message, history = [], context = {} }) {
   }
 
   try {
+    const { ROUTES } = require('./intentRouter');
+    for (const route of ROUTES) {
+      if (route.pattern.test(message)) {
+        const routeData = await route.chain(message, context);
+        if (routeData) {
+          // Skip tool loop, do synthesis call
+          const contents = [
+            ...history.map((turn) => ({
+              role: turn.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: turn.content }],
+            })),
+            { role: 'user', parts: [{ text: message }] },
+          ];
+
+          // Push the fake model turn making the function calls
+          contents.push({
+            role: 'model',
+            parts: routeData.toolCalls.map(c => ({ functionCall: { name: c.name, args: c.args } }))
+          });
+
+          // Push the fake user turn with the function responses
+          contents.push({
+            role: 'user',
+            parts: routeData.results.map(r => ({ functionResponse: { name: r.name, response: r.response } }))
+          });
+
+          // Single synthesis call, NO tools provided
+          const final = await gemini.generateContent({ contents, systemInstruction: SYSTEM_INSTRUCTION });
+          const replyText = gemini.extractText(final) || 'Here is what I found.';
+          if (context.customerId) appendCustomerHistory(context.customerId, message, replyText);
+
+          return {
+            reply: replyText,
+            products: routeData.products || [],
+            toolCalls: routeData.toolCalls,
+            usedModel: true,
+          };
+        }
+      }
+    }
+
     return await runGeminiLoop({ message, history, context });
   } catch (err) {
     logger.error('Gemini loop failed, using deterministic fallback', err.message);
@@ -80,8 +146,10 @@ async function runGeminiLoop({ message, history, context }) {
     const calls = gemini.extractFunctionCalls(response);
 
     if (calls.length === 0) {
+      const replyText = gemini.extractText(response) || 'I could not find anything for that.';
+      if (context.customerId) appendCustomerHistory(context.customerId, message, replyText);
       return {
-        reply: gemini.extractText(response) || 'I could not find anything for that.',
+        reply: replyText,
         products,
         toolCalls,
         usedModel: true,
@@ -92,23 +160,35 @@ async function runGeminiLoop({ message, history, context }) {
     // the full exchange.
     contents.push(response.candidates[0].content);
 
+    // Calls within a single round come from one Gemini response - the model
+    // never saw one call's result before emitting the next, so they have no
+    // dependency on each other and are safe to run concurrently. Chaining
+    // ACROSS rounds (this round's results feeding the next round's call)
+    // still happens in order, because the next generateContent() only fires
+    // after this whole round's results are pushed onto `contents` below.
+    const results = await Promise.all(
+      calls.map((call) => dispatch(call.name, call.args, context))
+    );
+
     const responseParts = [];
-    for (const call of calls) {
+    calls.forEach((call, i) => {
+      const result = results[i];
       toolCalls.push(call);
-      const result = await dispatch(call.name, call.args, context);
       if (Array.isArray(result.products)) products.push(...result.products);
       responseParts.push({
         functionResponse: { name: call.name, response: result },
       });
-    }
+    });
 
     contents.push({ role: 'user', parts: responseParts });
   }
 
   // Out of rounds - summarise what we have rather than looping forever.
   const final = await gemini.generateContent({ contents, systemInstruction: SYSTEM_INSTRUCTION });
+  const replyText = gemini.extractText(final) || 'Here is what I found.';
+  if (context.customerId) appendCustomerHistory(context.customerId, message, replyText);
   return {
-    reply: gemini.extractText(final) || 'Here is what I found.',
+    reply: replyText,
     products,
     toolCalls,
     usedModel: true,
@@ -182,9 +262,15 @@ async function fallbackChat(message, context) {
     return done('I could not find anything matching that. Try a broader search.', [], toolCalls);
   }
 
-  const warning = result.recentPurchase
-    ? `\n\nHeads up: you bought ${result.recentPurchase.productName} ${result.recentPurchase.daysAgo} days ago.`
-    : '';
+  // The recent-purchase note is only useful context for a NEW recommendation.
+  // "Is X available" is a direct lookup on a product the customer already
+  // knows they own - repurposing searchProducts to answer it (this fallback
+  // has no id-resolution step of its own) should not also surface an
+  // unrelated "you already bought this" warning.
+  const warning =
+    result.recentPurchase && !AVAILABILITY_INTENT.test(text)
+      ? `\n\nHeads up: you bought ${result.recentPurchase.productName} ${formatDaysAgo(result.recentPurchase.daysAgo)}.`
+      : '';
 
   return done(
     `Here is what I found:\n${result.products.map(bullet).join('\n')}${warning}`,
@@ -197,6 +283,9 @@ function bullet(product) {
   const discount = product.discountPercent ? ` (${product.discountPercent}% off)` : '';
   return `- ${product.name} - ₹${product.price}${discount}`;
 }
+
+/** "Is it available", "how many are left" - a direct lookup, not a discovery ask. */
+const AVAILABILITY_INTENT = /\b(available|availability|in stock|out of stock|stock left|how many.*(left|available|in stock)|do (you|we) have)\b/;
 
 /** Reads "under 80k", "below 50,000", "₹1,20,000" out of a message. */
 function extractBudget(text) {

@@ -6,6 +6,7 @@ const reviewsService = require('../reviews.service');
 const embeddings = require('./embeddings');
 const { rankProducts, diffProducts, lexicalSimilarity } = require('./ranking');
 const { RECENT_PURCHASE_DAYS } = require('../../utils/constants');
+const { formatDaysAgo } = require('../../utils/formatDaysAgo');
 const logger = require('../../utils/logger');
 
 /**
@@ -55,6 +56,80 @@ setInterval(() => {
 
 // --- tools ----------------------------------------------------------------
 
+// Words that signal the query needs semantic matching rather than a plain
+// keyword/filter lookup - descriptive, comparative or use-case language where
+// no single product name or category will match literally.
+const FUZZY_QUERY_HINTS =
+  /\b(like|similar|best|good|great|top|recommend|suggest|comfortable|lightweight|durable|reliable|stylish|premium|budget[- ]friendly|beginner|professional|something|anything|need|looking for|works? (well|best)|suitable|ideal)\b/i;
+
+/**
+ * Cheap heuristic, not a classifier: does this query benefit from an
+ * embedding call, or is it plain enough that SQL/keyword filtering already
+ * finds the right rows? Short queries with no descriptive language (e.g.
+ * "electronics", "gaming laptop", a bare category the model echoed back)
+ * skip the embedding round-trip; anything longer or with fuzzy wording still
+ * gets embedded as before.
+ */
+function needsSemanticSearch(query) {
+  if (!query || !query.trim()) return false;
+  const trimmed = query.trim();
+  if (FUZZY_QUERY_HINTS.test(trimmed)) return true;
+  return trimmed.split(/\s+/).length > 2;
+}
+
+// The catalog's category column holds specific values ("earphones",
+// "laptops", "mobiles"), not an umbrella bucket - a customer or the model
+// saying "electronics"/"tech"/"gadgets" would otherwise filter to a category
+// that does not exist and get zero results, even though every product here
+// IS electronics. Two lightweight rules cover it without a classifier: a
+// known umbrella term always clears the filter, and any other value that
+// isn't one of the catalog's real categories also clears the filter rather
+// than returning a guaranteed-empty search.
+const UMBRELLA_CATEGORY_TERMS = new Set([
+  'electronics', 'electronic', 'tech', 'technology', 'gadgets', 'gadget',
+  'devices', 'device', 'all',
+]);
+
+// listCategories() scans the whole products table, so its result is cached
+// briefly rather than re-fetched on every chat message - the catalog's set
+// of categories does not change mid-conversation.
+const CATEGORY_CACHE_TTL_MS = 10 * 60 * 1000;
+let categoryCache = { values: null, expiresAt: 0 };
+
+async function getKnownCategories() {
+  if (categoryCache.values && categoryCache.expiresAt > Date.now()) {
+    return categoryCache.values;
+  }
+  try {
+    const rows = await productsService.listCategories();
+    const values = new Set(rows.map((row) => String(row.name).toLowerCase()));
+    categoryCache = { values, expiresAt: Date.now() + CATEGORY_CACHE_TTL_MS };
+    return values;
+  } catch (err) {
+    logger.warn('Could not load category list for umbrella-term resolution', err.message);
+    return categoryCache.values || new Set();
+  }
+}
+
+/**
+ * Resolve a customer/model-supplied category to one the catalog actually
+ * uses, or null to search unfiltered. `null` means "don't filter" - passed
+ * straight through to searchByEmbedding/listProducts exactly like an
+ * omitted category.
+ */
+async function resolveCategory(category) {
+  if (!category) return null;
+  const normalized = String(category).trim().toLowerCase();
+  if (!normalized || UMBRELLA_CATEGORY_TERMS.has(normalized)) return null;
+
+  const known = await getKnownCategories();
+  if (known.size === 0) return category; // couldn't verify - don't block the search on that
+  if (known.has(normalized)) return category;
+
+  logger.info(`searchProducts: unrecognised category "${category}" - searching without a category filter`);
+  return null;
+}
+
 /**
  * The core search: semantic when embeddings are available, keyword when they
  * are not, then ranked in JS and checked against recent purchases.
@@ -62,14 +137,20 @@ setInterval(() => {
 async function searchProducts(args, context) {
   const {
     query,
-    category,
+    category: rawCategory,
     max_price: maxPrice,
     min_price: minPrice,
     only_discounted: onlyDiscounted,
     limit = 5,
   } = args || {};
 
-  const queryEmbedding = await embeddings.embedText(query);
+  const category = await resolveCategory(rawCategory);
+
+  // Skipping embedText() for plain filter queries saves a network round-trip
+  // (and its retry-with-backoff worst case) with no loss of quality: a null
+  // embedding here already routes through the exact same keyword-search path
+  // used when embeddings are unconfigured or the RPC returns nothing (below).
+  const queryEmbedding = needsSemanticSearch(query) ? await embeddings.embedText(query) : null;
 
   // Pull a wide candidate set, then let the ranker narrow it - ranking over
   // 5 rows the database happened to return first would be pointless.
@@ -169,7 +250,7 @@ async function searchProducts(args, context) {
     result.recentPurchase = {
       productName: recent.product.name,
       daysAgo: recent.daysAgo,
-      note: `The customer bought ${recent.product.name} ${recent.daysAgo} days ago, within the last ${RECENT_PURCHASE_DAYS} days. Mention this before recommending another one.`,
+      note: `The customer bought ${recent.product.name} ${formatDaysAgo(recent.daysAgo)}, within the last ${RECENT_PURCHASE_DAYS} days. If you are recommending a product to them right now, mention this kindly before doing so. Do not mention it if they directly asked about a specific product they already know they own (an availability or stock check) - only bring it up when it is relevant context for a NEW recommendation.`,
     };
   }
 
@@ -192,7 +273,9 @@ async function getOrderHistory(args, context) {
       status: order.status,
       total: order.total,
       items: (order.items || []).map((item) => ({
+        productId: item.productId,
         name: item.product?.name ?? `Product ${item.productId}`,
+        category: item.product?.category ?? null,
         quantity: item.quantity,
         unitPrice: item.unitPrice,
       })),
