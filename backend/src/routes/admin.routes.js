@@ -1,0 +1,1 @@
+// /admin — discounts, inventory, product management\n

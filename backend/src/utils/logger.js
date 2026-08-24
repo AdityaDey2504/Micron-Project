@@ -1,0 +1,1 @@
+// Simple console/file logger — helps you debug the AI loop live\n

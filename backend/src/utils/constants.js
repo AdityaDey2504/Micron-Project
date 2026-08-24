@@ -1,0 +1,1 @@
+// Category enums, max-iteration cap for the tool-call loop, etc.\n

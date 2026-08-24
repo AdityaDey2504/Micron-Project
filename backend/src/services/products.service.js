@@ -1,0 +1,1 @@
+// searchProducts, checkInventory, compareProducts — DB + pgvector queries\n
