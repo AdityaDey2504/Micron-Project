@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router';
 
 interface SectionProps {
   title: string;
@@ -14,11 +15,15 @@ const Section: React.FC<SectionProps> = ({ title, badge, items }) => (
     </div>
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       {items.map((i) => (
-        <div key={i} className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm transition">
+        <Link 
+          key={i} 
+          to={`/product/${i}`}
+          className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm hover:border-indigo-600 transition block"
+        >
           <div className="h-40 bg-slate-100 rounded-lg mb-3 flex items-center justify-center text-slate-400 text-xs">Image</div>
           <p className="text-sm font-medium text-slate-800">Minimalist Item #{i}</p>
           <p className="text-xs text-slate-500 mt-1">$49.00</p>
-        </div>
+        </Link>
       ))}
     </div>
   </section>

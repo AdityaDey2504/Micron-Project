@@ -1,4 +1,5 @@
 import React, { useState, type ChangeEvent } from 'react';
+import { Link } from 'react-router';
 
 const Search: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -45,10 +46,15 @@ const Search: React.FC = () => {
         />
         <div className="grid grid-cols-3 gap-4">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="bg-white border border-slate-200 rounded-xl p-4">
-              <div className="h-32 bg-slate-100 rounded-lg mb-2"></div>
-              <p className="text-sm font-medium">Search Result #{i}</p>
-            </div>
+            <Link 
+              key={i} 
+              to={`/product/${i}`}
+              className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm hover:border-indigo-600 transition block"
+            >
+              <div className="h-32 bg-slate-100 rounded-lg mb-2 flex items-center justify-center text-slate-400 text-xs">Image</div>
+              <p className="text-sm font-medium text-slate-800">Search Result #{i}</p>
+              <p className="text-xs text-slate-500 mt-1">$69.00</p>
+            </Link>
           ))}
         </div>
       </main>
