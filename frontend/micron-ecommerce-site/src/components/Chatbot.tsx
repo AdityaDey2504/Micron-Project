@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router';
+import ReactMarkdown from 'react-markdown';
 import { sendChatMessage, getProductById } from '../api/endpoints';
 import type { RankedProduct, ChatHistoryTurn } from '../types/api-types';
 import { useApp } from '../context/AppContext';
@@ -140,12 +141,16 @@ export const Chatbot: React.FC = () => {
           <div className="flex-1 p-3 overflow-y-auto space-y-3 text-xs bg-slate-50">
             {messages.map((msg) => (
               <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`max-w-[85%] rounded-xl px-3 py-2 whitespace-pre-wrap ${
+                <div className={`max-w-[85%] rounded-xl px-3 py-2 ${
                   msg.sender === 'user' 
-                    ? 'bg-indigo-600 text-white rounded-br-none' 
-                    : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm'
+                    ? 'bg-indigo-600 text-white rounded-br-none whitespace-pre-wrap' 
+                    : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none shadow-sm [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-bold [&_ul]:list-disc [&_ul]:ml-4 [&_ol]:list-decimal [&_ol]:ml-4'
                 }`}>
-                  {msg.text}
+                  {msg.sender === 'user' ? (
+                    msg.text
+                  ) : (
+                    <ReactMarkdown>{msg.text}</ReactMarkdown>
+                  )}
                 </div>
 
                 {msg.products && msg.products.length > 0 && (

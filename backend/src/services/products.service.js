@@ -28,6 +28,13 @@ const STOP_WORDS = new Set([
   'recommend', 'recommendation', 'suggest', 'suggestion', 'give', 'tell',
   'about', 'which', 'what', 'options', 'option', 'like', 'would', 'can',
   'you', 'have', 'there', 'new', 'latest', 'top',
+  // Umbrella terms for the whole catalog, not a real category value -
+  // every product here already IS electronics, so these carry no signal
+  // and would otherwise ILIKE-match nothing and return zero results. Keep
+  // in sync with UMBRELLA_CATEGORY_TERMS in services/ai/toolDispatcher.js,
+  // which does the equivalent for the structured `category` argument.
+  'electronics', 'electronic', 'tech', 'technology', 'gadgets', 'gadget',
+  'devices', 'device',
 ]);
 
 // The catalog names categories one way, customers say them another. Mapping
@@ -349,6 +356,18 @@ async function setStock(productId, stock) {
   return { productId, stock: data ? Number(data[I.stock]) : stock };
 }
 
+async function resolveProductNameToId(name) {
+  const strict = await listProducts({ search: name, limit: 1, searchMode: 'all' });
+  if (strict.items.length > 0) return strict.items[0].id;
+
+  const loose = await listProducts({ search: name, limit: 2, searchMode: 'any' });
+  // Confidence guard: if loose search finds exactly one match, we can trust it.
+  // If it finds multiple, it's ambiguous, so return null to let the model decide.
+  if (loose.items.length === 1) return loose.items[0].id;
+
+  return null;
+}
+
 module.exports = {
   listProducts,
   searchTokens,
@@ -362,4 +381,5 @@ module.exports = {
   updateProduct,
   deleteProduct,
   setStock,
+  resolveProductNameToId,
 };

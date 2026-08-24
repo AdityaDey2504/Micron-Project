@@ -38,7 +38,7 @@ async function generateContent({
   systemInstruction,
   generationConfig,
   model = env.geminiModel,
-  timeoutMs = 20_000,
+  timeoutMs = 25_000,
 } = {}) {
   if (!isConfigured()) {
     throw new Error('GEMINI_API_KEY is not set');
