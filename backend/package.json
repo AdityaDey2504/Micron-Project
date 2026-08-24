@@ -1,15 +1,22 @@
 {
-  "name": "backend",
+  "name": "micron-backend",
   "version": "1.0.0",
-  "type": "module",
+  "private": true,
+  "description": "Express API for Micron e-commerce + product chatbot",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "seed:products": "node src/db/seed/seedProducts.js",
+    "seed:users": "node src/db/seed/seedUsers.js",
+    "seed:orders": "node src/db/seed/seedOrders.js"
   },
   "dependencies": {
-    "@google/genai": "^2.18.0",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1"
+    "@supabase/supabase-js": "^2.45.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2"
   }
 }

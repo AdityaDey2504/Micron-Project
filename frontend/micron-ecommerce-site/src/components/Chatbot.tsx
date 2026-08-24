@@ -32,7 +32,8 @@ export const Chatbot: React.FC = () => {
 
     const userText = input;
     const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: userText };
-    setMessages((prev) => [...prev, userMsg]);
+    const loadingId = Date.now().toString() + 'loading';
+    setMessages((prev) => [...prev, userMsg, { id: loadingId, sender: 'bot', text: 'Thinking...' }]);
     setInput('');
 
     try {
@@ -48,9 +49,9 @@ export const Chatbot: React.FC = () => {
       const botMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: data.response,
+        text: data.reply,
       };
-      setMessages((prev) => [...prev, botMsg]);
+      setMessages((prev) => prev.map(m => m.id === loadingId ? botMsg : m));
     } catch (error) {
       console.error('Chat error:', error);
       const errorMsg: Message = {
@@ -58,7 +59,7 @@ export const Chatbot: React.FC = () => {
         sender: 'bot',
         text: "Sorry, I'm having trouble connecting right now.",
       };
-      setMessages((prev) => [...prev, errorMsg]);
+      setMessages((prev) => prev.map(m => m.id === loadingId ? errorMsg : m));
     }
   };
 
