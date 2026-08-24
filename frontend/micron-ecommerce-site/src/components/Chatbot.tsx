@@ -26,23 +26,41 @@ export const Chatbot: React.FC = () => {
     }
   }, [messages, isOpen]);
 
-  const handleSendMessage = (e: SubmitEvent) => {
+  const handleSendMessage = async (e: SubmitEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: input };
-    setMessages((prev) => [...prev, userMsg]);
+    const userText = input;
+    const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: userText };
+    const loadingId = Date.now().toString() + 'loading';
+    setMessages((prev) => [...prev, userMsg, { id: loadingId, sender: 'bot', text: 'Thinking...' }]);
     setInput('');
 
-    // Simulated bot response
-    setTimeout(() => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userText }),
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch response');
+
+      const data = await response.json();
       const botMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: "I'm here to assist! Let me check that product catalog for you.",
+        text: data.reply,
       };
-      setMessages((prev) => [...prev, botMsg]);
-    }, 600);
+      setMessages((prev) => prev.map(m => m.id === loadingId ? botMsg : m));
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        sender: 'bot',
+        text: "Sorry, I'm having trouble connecting right now.",
+      };
+      setMessages((prev) => prev.map(m => m.id === loadingId ? errorMsg : m));
+    }
   };
 
   return (
