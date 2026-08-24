@@ -1,1 +1,1 @@
-// Category enums, max-iteration cap for the tool-call loop, etc.\n
+export const CHAT_MODEL = "gemini-3.6-flash";
