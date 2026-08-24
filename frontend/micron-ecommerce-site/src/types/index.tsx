@@ -2,17 +2,17 @@ export interface Product {
   id: number;
   title: string;
   price: number;
-  category?: string;
+  category: string;
   imageUrl?: string;
   description?: string;
 }
 
-export interface Order {
+export interface CatalogCategory {
   id: string;
-  date: string;
-  total: number;
-  itemsCount: number;
-  status: 'Delivered' | 'Processing' | 'Shipped';
+  name: string;
+  description: string;
+  itemCount: number;
 }
 
 export type AdminTab = 'manage' | 'add' | 'sold' | 'inventory';
+export type UserRole = 'customer' | 'admin';
