@@ -35,44 +35,37 @@ export const Chatbot: React.FC = () => {
     const userText = input;
     const userMsg: UIMessage = { id: Date.now().toString(), sender: 'user', text: userText };
 
-    setMessages((prev) => [...prev, userMsg]);
+    const userText = input;
+    const userMsg: Message = { id: Date.now().toString(), sender: 'user', text: userText };
+    const loadingId = Date.now().toString() + 'loading';
+    setMessages((prev) => [...prev, userMsg, { id: loadingId, sender: 'bot', text: 'Thinking...' }]);
     setInput('');
     setIsLoading(true);
 
     try {
-      const history: ChatHistoryTurn[] = messages
-        .map((m) => ({
-          role: m.sender === 'user' ? ('user' as const) : ('assistant' as const),
-          content: m.text,
-        }))
-        .slice(-10);
-
-      const response = await sendChatMessage({
-        message: userText,
-        history,
-        cart,
-        sessionId,
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userText }),
       });
 
-      setSessionId(response.sessionId);
+      if (!response.ok) throw new Error('Failed to fetch response');
 
-      const botMsg: UIMessage = {
+      const data = await response.json();
+      const botMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: response.reply,
-        products: response.products,
+        text: data.reply,
       };
-
-      setMessages((prev) => [...prev, botMsg]);
-    } catch (err) {
-      const errorMsg: UIMessage = {
+      setMessages((prev) => prev.map(m => m.id === loadingId ? botMsg : m));
+    } catch (error) {
+      console.error('Chat error:', error);
+      const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'bot',
-        text: err instanceof Error ? err.message : 'Something went wrong. Please try again.',
+        text: "Sorry, I'm having trouble connecting right now.",
       };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
+      setMessages((prev) => prev.map(m => m.id === loadingId ? errorMsg : m));
     }
   };
 

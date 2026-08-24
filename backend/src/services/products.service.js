@@ -22,6 +22,35 @@ const STOP_WORDS = new Set([
   'product', 'products', 'item', 'items', 'something', 'under', 'below',
   'above', 'over', 'less', 'than', 'upto', 'up', 'within', 'budget', 'price',
   'cheap', 'cheapest', 'rs', 'inr', 'rupees',
+  // Request verbs. Without these, "recommend a mobile phone" requires the word
+  // "recommend" to appear in the product itself, so strict matching finds
+  // nothing and the search falls back to far worse results.
+  'recommend', 'recommendation', 'suggest', 'suggestion', 'give', 'tell',
+  'about', 'which', 'what', 'options', 'option', 'like', 'would', 'can',
+  'you', 'have', 'there', 'new', 'latest', 'top',
+]);
+
+// The catalog names categories one way, customers say them another. Mapping
+// synonyms onto the catalog's own words lets strict matching hit the category
+// column - "phone" alone would otherwise never match the "mobiles" category.
+const SYNONYMS = new Map([
+  ['phone', 'mobile'],
+  ['phones', 'mobile'],
+  ['smartphone', 'mobile'],
+  ['smartphones', 'mobile'],
+  ['mobiles', 'mobile'],
+  ['cellphone', 'mobile'],
+  ['headphone', 'earphone'],
+  ['headphones', 'earphone'],
+  ['headset', 'earphone'],
+  ['earphones', 'earphone'],
+  ['earbud', 'earphone'],
+  ['earbuds', 'earphone'],
+  ['buds', 'earphone'],
+  ['tws', 'earphone'],
+  ['notebook', 'laptop'],
+  ['laptops', 'laptop'],
+  ['computer', 'laptop'],
 ]);
 
 /**
@@ -30,13 +59,17 @@ const STOP_WORDS = new Set([
  * budget figure ("80k", "25000") - price filtering is a separate argument.
  */
 function searchTokens(search) {
-  return String(search)
+  const tokens = String(search)
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((token) => token.length >= 3)
     .filter((token) => !STOP_WORDS.has(token))
     .filter((token) => !/^\d+k?$/.test(token))
-    .slice(0, 6); // cap the OR clause - more words stop narrowing anything
+    .map((token) => SYNONYMS.get(token) || token);
+
+  // Synonyms collapse words together ("mobile phone" -> mobile, mobile), so
+  // de-duplicate afterwards or the same term gets matched twice.
+  return [...new Set(tokens)].slice(0, 6);
 }
 
 function clampLimit(limit) {
@@ -112,7 +145,17 @@ async function listProducts({
   if (sort === 'price_asc') query = query.order(P.price, { ascending: true });
   else if (sort === 'price_desc') query = query.order(P.price, { ascending: false });
   else if (sort === 'discount') query = query.order(P.discountPercent, { ascending: false });
-  else query = query.order(P.id, { ascending: true });
+  else if (sort === 'popular') {
+    // Used for the search candidate pool. Postgres returns rows in
+    // primary-key order otherwise, which on this catalog means 400-odd
+    // no-name earphones before any product a customer has heard of. Rating
+    // count is the best available proxy for "a real product people buy", so
+    // the ranker gets a pool worth ranking.
+    query = query.order(COLUMNS.productsOptional.ratingCount, {
+      ascending: false,
+      nullsFirst: false,
+    });
+  } else query = query.order(P.id, { ascending: true });
 
   query = query.range(offset, offset + take - 1);
 
