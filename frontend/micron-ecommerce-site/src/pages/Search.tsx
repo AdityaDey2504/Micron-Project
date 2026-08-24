@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router';
-import { getProducts, searchProductsRanked } from '../api/endpoints';
+import { getProducts, getProductById, searchProductsRanked } from '../api/endpoints';
+import { getProductReviews, type RatingSummary } from '../api/reviews';
 import type { Product, RankedProduct, SearchResponse } from '../types/api-types';
 
 export default function Search() {
@@ -11,6 +12,8 @@ export default function Search() {
   
   const [standardProducts, setStandardProducts] = useState<Product[]>([]);
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null);
+  const [ratingsMap, setRatingsMap] = useState<Record<string, RatingSummary>>({});
+  const [imagesMap, setImagesMap] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState<boolean>(false);
   const [useRankedSearch, setUseRankedSearch] = useState<boolean>(false);
 
@@ -18,9 +21,29 @@ export default function Search() {
     const fetchResults = async () => {
       setLoading(true);
       try {
+        let itemsToProcess: Array<{ id: string }> = [];
+
         if (useRankedSearch && searchTerm.trim()) {
           const res = await searchProductsRanked(searchTerm);
           setSearchResponse(res);
+          setStandardProducts([]);
+          itemsToProcess = res.products || [];
+
+          // Fetch full product details to get image URLs for ranked products
+          const uniqueRankedIds = Array.from(new Set(itemsToProcess.map((p) => p.id)));
+          const productDetailResults = await Promise.allSettled(
+            uniqueRankedIds.map((id) => getProductById(id))
+          );
+
+          const newImagesMap: Record<string, string> = {};
+          productDetailResults.forEach((result, idx) => {
+            if (result.status === 'fulfilled' && result.value?.imageUrl) {
+              const prodId = uniqueRankedIds[idx];
+              newImagesMap[prodId] = result.value.imageUrl;
+            }
+          });
+          setImagesMap(newImagesMap);
+
         } else {
           setSearchResponse(null);
           const res = await getProducts({
@@ -29,7 +52,28 @@ export default function Search() {
             maxPrice,
             sort,
           });
-          setStandardProducts(res.items);
+          setStandardProducts(res.items || []);
+          itemsToProcess = res.items || [];
+          setImagesMap({});
+        }
+
+        // Fetch rating summaries in parallel for all returned products
+        if (itemsToProcess.length > 0) {
+          const uniqueIds = Array.from(new Set(itemsToProcess.map((p) => p.id)));
+          const reviewResults = await Promise.allSettled(
+            uniqueIds.map((id) => getProductReviews(id, 1, 0))
+          );
+
+          const newRatingsMap: Record<string, RatingSummary> = {};
+          reviewResults.forEach((result, idx) => {
+            if (result.status === 'fulfilled' && result.value?.summary) {
+              const prodId = uniqueIds[idx];
+              newRatingsMap[prodId] = result.value.summary;
+            }
+          });
+          setRatingsMap(newRatingsMap);
+        } else {
+          setRatingsMap({});
         }
       } catch (err) {
         console.error(err);
@@ -41,6 +85,28 @@ export default function Search() {
     const delayDebounce = setTimeout(fetchResults, 300);
     return () => clearTimeout(delayDebounce);
   }, [searchTerm, category, maxPrice, sort, useRankedSearch]);
+
+  const renderRating = (productId: string) => {
+    const summary = ratingsMap[productId];
+    const hasRating = summary && summary.average !== null;
+
+    return (
+      <div className="flex items-center space-x-1 mt-1 text-xs">
+        {hasRating ? (
+          <>
+            <span className="text-amber-400 font-bold">★ {summary.average?.toFixed(1)}</span>
+            <span className="text-slate-400 text-[10px]">({summary.count})</span>
+          </>
+        ) : (
+          <span className="text-slate-400 text-[10px] italic">No ratings</span>
+        )}
+      </div>
+    );
+  };
+
+  const isRankedEmpty = useRankedSearch && searchResponse && searchResponse.products.length === 0;
+  const isStandardEmpty = !useRankedSearch && standardProducts.length === 0;
+  const isEmpty = isRankedEmpty || isStandardEmpty;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -132,40 +198,65 @@ export default function Search() {
 
         {loading ? (
           <div className="text-center py-12 text-xs text-slate-400">Searching catalog...</div>
+        ) : isEmpty ? (
+          <div className="bg-white border border-slate-200 rounded-xl p-12 text-center space-y-3">
+            <div className="text-3xl text-slate-300">🔍</div>
+            <h3 className="text-sm font-semibold text-slate-800">No products found</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+              We couldn't find anything matching your filters or search term. Try adjusting your search query, increasing max price, or changing categories.
+            </p>
+          </div>
         ) : useRankedSearch && searchResponse ? (
-          <div className="grid grid-cols-3 gap-4">
-            {searchResponse.products.map((prod: RankedProduct) => (
-              <Link
-                key={prod.id}
-                to={`/product/${prod.id}`}
-                className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm hover:border-indigo-600 transition block"
-              >
-                <div className="h-32 bg-slate-100 rounded-lg mb-2 flex items-center justify-center text-slate-400 text-xs">
-                  Image
-                </div>
-                <p className="text-sm font-medium text-slate-800 truncate">{prod.name}</p>
-                <div className="flex items-center space-x-2 mt-1">
-                  <span className="text-xs text-indigo-600 font-semibold">₹{prod.price}</span>
-                  {prod.discountPercent > 0 && (
-                    <span className="text-[10px] text-slate-400 line-through">₹{prod.listPrice}</span>
-                  )}
-                </div>
-              </Link>
-            ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {searchResponse.products.map((prod: RankedProduct) => {
+              const imageUrl = imagesMap[prod.id];
+              return (
+                <Link
+                  key={prod.id}
+                  to={`/product/${prod.id}`}
+                  className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm hover:border-indigo-600 transition block flex flex-col justify-between group"
+                >
+                  <div>
+                    <div className="h-32 bg-slate-100 rounded-lg mb-2 flex items-center justify-center text-slate-400 text-xs overflow-hidden">
+                      {imageUrl ? (
+                        <img src={imageUrl} alt={prod.name} className="h-full w-full object-cover" />
+                      ) : (
+                        'No Image'
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-slate-800 truncate group-hover:text-indigo-600">{prod.name}</p>
+                    {renderRating(prod.id)}
+                  </div>
+                  <div className="flex items-center space-x-2 mt-3">
+                    <span className="text-xs text-indigo-600 font-semibold">₹{prod.price}</span>
+                    {prod.discountPercent > 0 && (
+                      <span className="text-[10px] text-slate-400 line-through">₹{prod.listPrice}</span>
+                    )}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {standardProducts.map((prod: Product) => (
               <Link
                 key={prod.id}
                 to={`/product/${prod.id}`}
-                className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm hover:border-indigo-600 transition block"
+                className="bg-white border border-slate-200 rounded-xl p-4 hover:shadow-sm hover:border-indigo-600 transition block flex flex-col justify-between group"
               >
-                <div className="h-32 bg-slate-100 rounded-lg mb-2 flex items-center justify-center text-slate-400 text-xs overflow-hidden">
-                  {prod.imageUrl ? <img src={prod.imageUrl} alt={prod.name} className="h-full w-full object-cover" /> : 'Image'}
+                <div>
+                  <div className="h-32 bg-slate-100 rounded-lg mb-2 flex items-center justify-center text-slate-400 text-xs overflow-hidden">
+                    {prod.imageUrl ? (
+                      <img src={prod.imageUrl} alt={prod.name} className="h-full w-full object-cover" />
+                    ) : (
+                      'No Image'
+                    )}
+                  </div>
+                  <p className="text-sm font-medium text-slate-800 truncate group-hover:text-indigo-600">{prod.name}</p>
+                  {renderRating(prod.id)}
                 </div>
-                <p className="text-sm font-medium text-slate-800 truncate">{prod.name}</p>
-                <div className="flex items-center space-x-2 mt-1">
+                <div className="flex items-center space-x-2 mt-3">
                   <span className="text-xs text-indigo-600 font-semibold">₹{prod.finalPrice}</span>
                   {prod.discountPercent > 0 && (
                     <span className="text-[10px] text-slate-400 line-through">₹{prod.price}</span>
