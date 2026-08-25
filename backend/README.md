@@ -72,7 +72,7 @@ register themselves as an admin.
 
 | Method | Path | Notes |
 |---|---|---|
-| `GET` | `/api/products` | `?category=&search=&minPrice=&maxPrice=&discounted=true&sort=price_asc\|price_desc\|discount&limit=&offset=` |
+| `GET` | `/api/products` | `?category=&search=&minPrice=&maxPrice=&discounted=true&sort=price_asc\|price_desc\|discount\|popular\|reviews&limit=&offset=` |
 | `GET` | `/api/products/categories` | For the catalog overview page |
 | `GET` | `/api/products/discounted` | Biggest discount first |
 | `GET` | `/api/products/search` | `?q=` — the ranked search the chatbot uses, without the model call |

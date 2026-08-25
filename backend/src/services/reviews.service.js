@@ -193,7 +193,86 @@ async function createReview(productId, { customerId, rating, title, text }) {
     .single();
 
   if (error) fail(error, 'review create');
+  invalidateRanking();
   return mapReview(data);
 }
 
-module.exports = { listForProduct, summaryForProduct, forChat, createReview };
+// --- ranking products by their reviews -----------------------------------
+
+// The whole reviews table is ~5k rows, small enough to aggregate in memory and
+// far cheaper than a round trip per product. Cached briefly so a page of
+// results does not re-read it, but short enough that a review posted during a
+// demo shows up in the ordering almost immediately.
+let rankingCache = null;
+let rankingCachedAt = 0;
+const RANKING_TTL_MS = 15_000;
+
+/**
+ * Products ordered by how many reviews they have, then by average rating.
+ *
+ * Returns [{ productId, count, average }]. Products with no reviews are
+ * absent, so callers should treat this as a filter as well as an ordering.
+ */
+async function rankingByReviews({ category, force = false } = {}) {
+  const fresh = rankingCache && Date.now() - rankingCachedAt < RANKING_TTL_MS;
+
+  if (!fresh || force) {
+    const rows = [];
+    // Supabase caps a select at 1000 rows, so page through the table.
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase
+        .from(TABLES.reviews)
+        .select(`${R.productId},${R.rating},${R.category}`)
+        .range(from, from + 999);
+
+      if (error) fail(error, 'review ranking');
+      if (!data || data.length === 0) break;
+      rows.push(...data);
+      if (data.length < 1000) break;
+    }
+
+    const byProduct = new Map();
+    for (const row of rows) {
+      const id = row[R.productId];
+      const entry = byProduct.get(id) || { productId: id, count: 0, sum: 0, category: row[R.category] };
+      entry.count += 1;
+      entry.sum += Number(row[R.rating]) || 0;
+      byProduct.set(id, entry);
+    }
+
+    rankingCache = [...byProduct.values()].map((e) => ({
+      productId: e.productId,
+      category: e.category,
+      count: e.count,
+      average: Math.round((e.sum / e.count) * 10) / 10,
+    }));
+    rankingCachedAt = Date.now();
+  }
+
+  const list = category
+    ? rankingCache.filter((r) => String(r.category).toLowerCase() === String(category).toLowerCase())
+    : rankingCache;
+
+  // Most reviewed first, then best rated, then a stable tiebreak on id so the
+  // order never shuffles between identical requests.
+  return [...list].sort(
+    (a, b) =>
+      b.count - a.count ||
+      b.average - a.average ||
+      String(a.productId).localeCompare(String(b.productId))
+  );
+}
+
+/** Drops the cache so a newly posted review is reflected immediately. */
+function invalidateRanking() {
+  rankingCache = null;
+}
+
+module.exports = {
+  listForProduct,
+  summaryForProduct,
+  forChat,
+  createReview,
+  rankingByReviews,
+  invalidateRanking,
+};

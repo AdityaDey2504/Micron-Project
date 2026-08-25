@@ -106,6 +106,14 @@ async function listProducts({
   searchMode = 'any',
 } = {}) {
   const take = clampLimit(limit);
+
+  // Ordering by review activity cannot be expressed in a single PostgREST
+  // query - it needs an aggregate over another table - so it takes its own
+  // path: rank in memory, then fetch just that page of products.
+  if (sort === 'reviews') {
+    return listByReviewRank({ category, minPrice, maxPrice, onlyDiscounted, limit: take, offset });
+  }
+
   let query = supabase.from(TABLES.products).select(PRODUCT_SELECT, { count: 'exact' });
 
   if (category) query = query.ilike(P.category, category);
@@ -182,6 +190,52 @@ async function listProducts({
     limit: take,
     offset: Number(offset) || 0,
   };
+}
+
+/**
+ * Products ordered by number of reviews, then average rating.
+ *
+ * Only products that HAVE reviews appear - that is the point of the sort. Any
+ * price filters are applied to the fetched page, so a page can come back
+ * shorter than the limit when they exclude something; the caller still gets
+ * the correct ordering.
+ */
+async function listByReviewRank({ category, minPrice, maxPrice, onlyDiscounted, limit, offset }) {
+  // Required lazily: reviews.service imports nothing from here, but keeping
+  // the require inside the function avoids any chance of a cycle.
+  const reviewsService = require('./reviews.service');
+  const ranked = await reviewsService.rankingByReviews({ category });
+
+  const pageIds = ranked.slice(offset, offset + limit).map((r) => r.productId);
+  if (pageIds.length === 0) {
+    return { items: [], total: ranked.length, limit, offset: Number(offset) || 0 };
+  }
+
+  let query = supabase.from(TABLES.products).select(PRODUCT_SELECT).in(P.id, pageIds);
+  if (minPrice != null) query = query.gte(P.price, Number(minPrice));
+  if (maxPrice != null) query = query.lte(P.price, Number(maxPrice));
+  if (onlyDiscounted) query = query.gt(P.discountPercent, 0);
+
+  const { data, error } = await query;
+  if (error) fail(error, 'review-ranked listing');
+
+  // The database returns them in its own order; restore the ranked order and
+  // attach the review figures so the card can show them without another call.
+  const byId = new Map((data || []).map((row) => [row[P.id], row]));
+  const items = [];
+  for (const entry of ranked.slice(offset, offset + limit)) {
+    const row = byId.get(entry.productId);
+    if (!row) continue; // filtered out by price
+    // Named distinctly from `reviewCount`, which is Flipkart's figure from the
+    // dataset. These two count different things and must not be conflated.
+    items.push({
+      ...mapProduct(row),
+      storeReviewCount: entry.count,
+      storeReviewAverage: entry.average,
+    });
+  }
+
+  return { items, total: ranked.length, limit, offset: Number(offset) || 0 };
 }
 
 async function getProductById(id) {
@@ -377,6 +431,7 @@ async function resolveProductNameToId(name) {
 
 module.exports = {
   listProducts,
+  listByReviewRank,
   searchTokens,
   getProductById,
   getProductsByIds,

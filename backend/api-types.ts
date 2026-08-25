@@ -59,7 +59,11 @@
  *   minPrice=5000
  *   maxPrice=80000
  *   discounted=true         only products with a discount
- *   sort=price_asc | price_desc | discount | popular
+ *   sort=price_asc | price_desc | discount | popular | reviews
+ *       popular = Flipkart rating_count (real ratings, covers all products)
+ *       reviews = our reviews table: most reviews first, then best average.
+ *                 Only returns products that HAVE reviews, and adds
+ *                 storeReviewCount + storeReviewAverage to each item.
  *   limit=20                default 20, max 100
  *   offset=0
  *
@@ -134,6 +138,15 @@ export interface Product {
 
   /** Sellable stock. null = unknown, not sold out. Only on GET /products/:id. */
   stock?: number | null;
+
+  // Present only on sort=reviews, so the card can show review figures without
+  // a second request per product. NOTE these are OUR reviews, counted from the
+  // reviews table - not the same thing as `reviewCount` below, which is the
+  // figure that came with the Flipkart dataset.
+  /** How many reviews this product has in our reviews table. */
+  storeReviewCount?: number;
+  /** Mean of our review ratings, to 1 decimal place. */
+  storeReviewAverage?: number;
 
   // Optional dataset fields - present only when the product has them.
   rating?: number;
