@@ -249,7 +249,7 @@ const AdminDashboard: React.FC = () => {
               </select>
             </div>
             <div>
-              <label className="block text-slate-400 mb-1">Price ($)</label>
+              <label className="block text-slate-400 mb-1">Price (₹)</label>
               <input
                 type="number"
                 step="0.01"
@@ -304,7 +304,7 @@ const AdminDashboard: React.FC = () => {
                       <td className="py-3 font-mono text-slate-400">#{ord.id}</td>
                       <td className="py-3 text-slate-200">{ord.userEmail || ord.customerName || 'Customer'}</td>
                       <td className="py-3 font-semibold text-emerald-400">
-                        ${Number(ord.total || 0).toFixed(2)}
+                        ₹{Number(ord.total || 0).toFixed(2)}
                       </td>
                       <td className="py-3">
                         <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-[11px] capitalize">
@@ -354,7 +354,7 @@ const AdminDashboard: React.FC = () => {
                       <td className="py-3 text-slate-400 capitalize">{item.category}</td>
                       <td className="py-3 text-emerald-400">{item.stock ?? 0} in stock</td>
                       <td className="py-3 font-medium text-slate-200">
-                        ${Number(item.price || 0).toFixed(2)}
+                        ₹{Number(item.price || 0).toFixed(2)}
                       </td>
                       <td className="py-3 space-x-3">
                         <button
