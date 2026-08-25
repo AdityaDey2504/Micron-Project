@@ -1,6 +1,6 @@
 import { type ApiError } from '../types/api-types';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const getAuthToken = (): string | null => localStorage.getItem('aura_auth_token');
 

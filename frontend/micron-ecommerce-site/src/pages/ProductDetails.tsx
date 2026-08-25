@@ -81,7 +81,7 @@ export default function ProductDetails() {
       setText('');
       setRating(5);
       setFormSuccess(true);
-      setTimeout(() => setFormSuccess(false), 4000);
+      setTimeout(() => setFormSuccess(false), 8000);
       
       // Refresh reviews and summary after submission
       fetchReviews(id);

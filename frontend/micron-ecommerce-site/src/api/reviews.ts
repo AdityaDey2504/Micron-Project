@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:4000';
+const BASE_URL = 'http://localhost:8000';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('aura_auth_token');

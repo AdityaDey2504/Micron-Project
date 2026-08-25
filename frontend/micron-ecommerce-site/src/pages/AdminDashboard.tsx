@@ -71,12 +71,12 @@ const AdminDashboard: React.FC = () => {
     try {
       if (tab === 'sold') {
         // GET /api/admin/orders
-        const data = await safeApiFetch<any>('http://localhost:4000/api/admin/orders');
+        const data = await safeApiFetch<any>('http://localhost:8000/api/admin/orders');
         const orderList = Array.isArray(data) ? data : data?.items || data?.orders || [];
         setOrders(orderList);
       } else {
         // GET /api/admin/inventory OR GET /api/products
-        const endpoint = tab === 'inventory' ? 'http://localhost:4000/api/admin/inventory' : 'http://localhost:4000/api/products';
+        const endpoint = tab === 'inventory' ? 'http://localhost:8000/api/admin/inventory' : 'http://localhost:8000/api/products';
         const data = await safeApiFetch<any>(endpoint);
         const itemList = Array.isArray(data) ? data : data?.items || data?.products || [];
         setItems(itemList);
@@ -103,7 +103,7 @@ const AdminDashboard: React.FC = () => {
     setError(null);
 
     try {
-      await safeApiFetch('http://localhost:4000/api/admin/products', {
+      await safeApiFetch('http://localhost:8000/api/admin/products', {
         method: 'POST',
         body: JSON.stringify({
           title,
@@ -130,7 +130,7 @@ const AdminDashboard: React.FC = () => {
     if (!window.confirm('Are you sure you want to delete this product?')) return;
 
     try {
-      await safeApiFetch(`http://localhost:4000/api/admin/products/${id}`, { method: 'DELETE' });
+      await safeApiFetch(`http://localhost:8000/api/admin/products/${id}`, { method: 'DELETE' });
       setItems((prev) => prev.filter((item) => item.id !== id));
     } catch (err: any) {
       alert(err.message || 'Failed to delete product.');
@@ -143,7 +143,7 @@ const AdminDashboard: React.FC = () => {
     if (input === null || input.trim() === '') return;
 
     try {
-      await safeApiFetch(`http://localhost:4000/api/admin/products/${id}/stock`, {
+      await safeApiFetch(`http://localhost:8000/api/admin/products/${id}/stock`, {
         method: 'PUT',
         body: JSON.stringify({ stock: parseInt(input, 10) }),
       });
@@ -159,7 +159,7 @@ const AdminDashboard: React.FC = () => {
     if (input === null || input.trim() === '') return;
 
     try {
-      await safeApiFetch(`http://localhost:4000/api/admin/products/${id}/discount`, {
+      await safeApiFetch(`http://localhost:8000/api/admin/products/${id}/discount`, {
         method: 'PUT',
         body: JSON.stringify({ discountPercentage: parseFloat(input) }),
       });
@@ -178,7 +178,7 @@ const AdminDashboard: React.FC = () => {
     if (!nextStatus || nextStatus === currentStatus) return;
 
     try {
-      await safeApiFetch(`http://localhost:4000/api/admin/orders/${orderId}/status`, {
+      await safeApiFetch(`http://localhost:8000/api/admin/orders/${orderId}/status`, {
         method: 'PATCH',
         body: JSON.stringify({ status: nextStatus }),
       });
