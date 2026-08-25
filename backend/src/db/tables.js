@@ -133,8 +133,13 @@ function mapProduct(row) {
   const c = COLUMNS.products;
   const o = COLUMNS.productsOptional;
 
-  const price = Number(row[c.price] ?? 0);
+  // products.price is ALREADY the selling price the customer pays;
+  // products.original_price is the pre-discount MRP. Treating `price` as the
+  // list price and applying discount_percent to it charges the discount twice
+  // - a 998 rupee product was being reported as 648.
+  const sellingPrice = Number(row[c.price] ?? 0);
   const mrp = row[o.mrp] == null ? null : Number(row[o.mrp]);
+  const listPrice = mrp != null && mrp > sellingPrice ? mrp : sellingPrice;
 
   // Prefer the stored discount_percent; fall back to deriving it from
   // original_price, which is how the Flipkart dataset expresses a discount.
@@ -142,8 +147,8 @@ function mapProduct(row) {
   const discountPercent =
     stored != null
       ? Number(stored)
-      : mrp && mrp > price
-        ? Math.round(((mrp - price) / mrp) * 100)
+      : listPrice > sellingPrice
+        ? Math.round(((listPrice - sellingPrice) / listPrice) * 100)
         : 0;
 
   const optional = {};
@@ -161,10 +166,12 @@ function mapProduct(row) {
     name: row[c.name],
     description: row[c.description] ?? null,
     category: row[c.category] ?? null,
-    price,
+    // `price` is the struck-through list price, `finalPrice` is what is
+    // actually charged. Both come straight from the row - no arithmetic - so
+    // the discount can never be applied twice.
+    price: listPrice,
     discountPercent,
-    // Precomputed so the frontend and the chatbot never disagree on the maths.
-    finalPrice: Math.round(price * (1 - discountPercent / 100) * 100) / 100,
+    finalPrice: sellingPrice,
     imageUrl: row[c.imageUrl] ?? null,
     createdAt: row[c.createdAt] ?? null,
   };

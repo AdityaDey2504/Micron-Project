@@ -259,7 +259,9 @@ async function searchProducts(args, context) {
 
 async function getOrderHistory(args, context) {
   if (!context.customerId) {
-    return { error: 'Not signed in. Ask the customer to log in to see their order history.' };
+    // Phrased so it reads correctly whether the model rewrites it or the
+    // deterministic fallback prints it to the customer verbatim.
+    return { error: 'You need to be logged in to see your order history.' };
   }
 
   const { items } = await ordersService.listOrdersForCustomer(context.customerId, {
@@ -325,7 +327,7 @@ async function compareProducts(args) {
 async function whatIfBudget(args, context) {
   const session = getSession(context.sessionId);
   if (!session.lastSearch) {
-    return { error: 'There is no previous search to re-run. Ask what they are shopping for first.' };
+    return { error: 'Tell me what you are shopping for first, then I can compare budgets.' };
   }
 
   const { query, category, embedding } = session.lastSearch;
@@ -368,7 +370,7 @@ async function whatIfBudget(args, context) {
 
 async function optimizeCart(args, context) {
   if (!context.cart || context.cart.length === 0) {
-    return { error: 'The cart is empty, so there is nothing to optimise.' };
+    return { error: 'Your cart is empty, so there is nothing to optimise yet.' };
   }
   return cartService.suggestSwaps(context.cart);
 }
