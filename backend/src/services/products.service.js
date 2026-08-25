@@ -149,10 +149,17 @@ async function listProducts({
     }
   }
 
-  if (sort === 'price_asc') query = query.order(P.price, { ascending: true });
-  else if (sort === 'price_desc') query = query.order(P.price, { ascending: false });
-  else if (sort === 'discount') query = query.order(P.discountPercent, { ascending: false });
-  else if (sort === 'popular') {
+  // nullsFirst: false on every descending sort. Postgres orders NULLs FIRST on
+  // DESC by default, so without it "highest price" and "biggest discount" both
+  // lead with the rows that have no price or no discount at all - which
+  // mapProduct then renders as 0. Ascending already puts NULLs last.
+  if (sort === 'price_asc') {
+    query = query.order(P.price, { ascending: true, nullsFirst: false });
+  } else if (sort === 'price_desc') {
+    query = query.order(P.price, { ascending: false, nullsFirst: false });
+  } else if (sort === 'discount') {
+    query = query.order(P.discountPercent, { ascending: false, nullsFirst: false });
+  } else if (sort === 'popular') {
     // Used for the search candidate pool. Postgres returns rows in
     // primary-key order otherwise, which on this catalog means 400-odd
     // no-name earphones before any product a customer has heard of. Rating
